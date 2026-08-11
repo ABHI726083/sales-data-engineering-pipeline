@@ -1,0 +1,12 @@
+order_id,order_date,product,category,quantity,price,city
+1001,2026-01-05,Laptop,Electronics,2,55000,Delhi
+1002,2026-01-07,Mouse,Electronics,5,800,Noida
+1003,2026-01-10,Keyboard,Electronics,3,1500,Delhi
+1004,2026-01-12,Chair,Furniture,2,4500,Greater Noida
+1005,2026-01-15,Desk,Furniture,1,8000,Noida
+1006,2026-01-18,Laptop,Electronics,1,55000,Lucknow
+1007,2026-01-20,Mouse,Electronics,10,800,Delhi
+1008,2026-01-22,Chair,Furniture,4,4500,Lucknow
+1009,2026-01-25,Desk,Furniture,2,8000,Delhi
+1010,2026-01-28,Keyboard,Electronics,6,1500,Noida
+1011,2026-01-30,Monitor,Electronics,5,12000,Delhi

@@ -1,227 +1,477 @@
 import os
+from io import StringIO
+
+import pandas as pd
 import psycopg2
 import streamlit as st
 from dotenv import load_dotenv
 
-load_dotenv()
 
-# -----------------------------
-# Connect to PostgreSQL
-# -----------------------------
+# ============================================================
+# PAGE CONFIGURATION
+# ============================================================
 
-conn = psycopg2.connect(
-    host=os.getenv("DB_HOST"),
-    port=os.getenv("DB_PORT"),
-    database=os.getenv("DB_NAME"),
-    user=os.getenv("DB_USER"),
-    password=os.getenv("DB_PASSWORD")
+st.set_page_config(
+    page_title="Sales Analytics Dashboard",
+    page_icon="📊",
+    layout="wide"
 )
 
-cursor = conn.cursor()
 
-# -----------------------------
-# Dashboard Title
-# -----------------------------
+# ============================================================
+# LOAD ENVIRONMENT VARIABLES
+# ============================================================
 
-st.title("Sales Analytics Dashboard")
+load_dotenv()
 
-# -----------------------------
-# Filters
-# -----------------------------
 
+# ============================================================
+# DATABASE CONNECTION
+# ============================================================
+
+@st.cache_resource
+def get_connection():
+    return psycopg2.connect(
+        host=os.getenv("DB_HOST"),
+        port=os.getenv("DB_PORT"),
+        database=os.getenv("DB_NAME"),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD")
+    )
+
+
+# ============================================================
+# LOAD DATA
+# ============================================================
+
+@st.cache_data
+def load_sales_data():
+    conn = get_connection()
+
+    query = """
+        SELECT
+            order_id,
+            order_date,
+            product,
+            category,
+            quantity,
+            price,
+            city,
+            total_sales
+        FROM sales
+        ORDER BY order_date, order_id;
+    """
+
+    df = pd.read_sql_query(query, conn)
+
+    df["order_date"] = pd.to_datetime(
+        df["order_date"]
+    ).dt.date
+
+    return df
+
+
+# ============================================================
+# LOAD DATABASE DATA
+# ============================================================
+
+try:
+    df = load_sales_data()
+
+except Exception as error:
+
+    st.error(
+        "Unable to connect to PostgreSQL or load sales data."
+    )
+
+    st.exception(error)
+
+    st.stop()
+
+
+# ============================================================
+# DASHBOARD TITLE
+# ============================================================
+
+st.title("📊 Sales Analytics Dashboard")
+
+st.caption(
+    "Interactive sales analytics powered by PostgreSQL"
+)
+
+
+# ============================================================
+# SIDEBAR FILTERS
+# ============================================================
+
+st.sidebar.header("Dashboard Filters")
+
+
+# ----------------------------
 # City Filter
-cursor.execute("""
-SELECT DISTINCT city
-FROM sales
-ORDER BY city;
-""")
+# ----------------------------
 
-cities = [row[0] for row in cursor.fetchall()]
+cities = sorted(
+    df["city"].dropna().unique().tolist()
+)
 
-selected_city = st.selectbox(
-    "Select City",
+selected_city = st.sidebar.selectbox(
+    "City",
     ["All Cities"] + cities
 )
 
-# Date Filter
-cursor.execute("""
-SELECT MIN(order_date), MAX(order_date)
-FROM sales;
-""")
 
-min_date, max_date = cursor.fetchone()
+# ----------------------------
+# Category Filter
+# ----------------------------
 
-start_date, end_date = st.date_input(
-    "Select Date Range",
-    value=(min_date, max_date)
+categories = sorted(
+    df["category"].dropna().unique().tolist()
 )
 
-# -----------------------------
-# Build SQL Filter
-# -----------------------------
+selected_category = st.sidebar.selectbox(
+    "Category",
+    ["All Categories"] + categories
+)
 
-conditions = []
-params = []
+
+# ----------------------------
+# Date Filter
+# ----------------------------
+
+min_date = df["order_date"].min()
+max_date = df["order_date"].max()
+
+selected_dates = st.sidebar.date_input(
+    "Date Range",
+    value=(min_date, max_date),
+    min_value=min_date,
+    max_value=max_date
+)
+
+
+# ============================================================
+# HANDLE DATE RANGE
+# ============================================================
+
+if isinstance(selected_dates, tuple):
+
+    if len(selected_dates) == 2:
+
+        start_date, end_date = selected_dates
+
+    else:
+
+        start_date = min_date
+        end_date = max_date
+
+else:
+
+    start_date = selected_dates
+    end_date = selected_dates
+
+
+# ============================================================
+# FILTER DATA
+# ============================================================
+
+filtered_df = df.copy()
+
 
 if selected_city != "All Cities":
-    conditions.append("city = %s")
-    params.append(selected_city)
 
-conditions.append("order_date BETWEEN %s AND %s")
-params.append(start_date)
-params.append(end_date)
+    filtered_df = filtered_df[
+        filtered_df["city"] == selected_city
+    ]
 
-where_clause = "WHERE " + " AND ".join(conditions)
 
-# -----------------------------
-# Total Sales
-# -----------------------------
+if selected_category != "All Categories":
 
-cursor.execute(f"""
-SELECT SUM(total_sales)
-FROM sales
-{where_clause};
-""", tuple(params))
+    filtered_df = filtered_df[
+        filtered_df["category"] == selected_category
+    ]
 
-total_sales = cursor.fetchone()[0] or 0
 
-# -----------------------------
-# Total Quantity
-# -----------------------------
+filtered_df = filtered_df[
+    (filtered_df["order_date"] >= start_date)
+    &
+    (filtered_df["order_date"] <= end_date)
+]
 
-cursor.execute(f"""
-SELECT SUM(quantity)
-FROM sales
-{where_clause};
-""", tuple(params))
 
-total_quantity = cursor.fetchone()[0] or 0
+# ============================================================
+# FILTER SUMMARY
+# ============================================================
 
-# -----------------------------
-# Top Product
-# -----------------------------
+st.sidebar.divider()
 
-cursor.execute(f"""
-SELECT product, SUM(total_sales) AS total_sales
-FROM sales
-{where_clause}
-GROUP BY product
-ORDER BY total_sales DESC
-LIMIT 1;
-""", tuple(params))
+st.sidebar.write(
+    f"Filtered rows: **{len(filtered_df)}**"
+)
 
-top_product_result = cursor.fetchone()
 
-if top_product_result:
-    top_product = top_product_result[0]
+# ============================================================
+# KPI CALCULATIONS
+# ============================================================
+
+total_sales = filtered_df["total_sales"].sum()
+
+total_quantity = filtered_df["quantity"].sum()
+
+total_orders = filtered_df["order_id"].nunique()
+
+
+if total_orders > 0:
+
+    average_order_value = (
+        total_sales / total_orders
+    )
+
 else:
+
+    average_order_value = 0
+
+
+# ============================================================
+# TOP PRODUCT
+# ============================================================
+
+if not filtered_df.empty:
+
+    product_sales = (
+        filtered_df
+        .groupby("product")["total_sales"]
+        .sum()
+        .sort_values(ascending=False)
+    )
+
+    top_product = product_sales.index[0]
+
+else:
+
     top_product = "N/A"
 
-# -----------------------------
-# KPI Cards
-# -----------------------------
 
-col1, col2, col3 = st.columns(3)
+# ============================================================
+# TOP CITY
+# ============================================================
+
+if not filtered_df.empty:
+
+    city_sales = (
+        filtered_df
+        .groupby("city")["total_sales"]
+        .sum()
+        .sort_values(ascending=False)
+    )
+
+    top_city = city_sales.index[0]
+
+else:
+
+    top_city = "N/A"
+
+
+# ============================================================
+# KPI CARDS
+# ============================================================
+
+st.subheader("Key Performance Indicators")
+
+col1, col2, col3, col4 = st.columns(4)
+
 
 col1.metric(
     "Total Sales",
-    f"₹{total_sales:,}"
+    f"₹{total_sales:,.0f}"
 )
+
 
 col2.metric(
-    "Total Quantity",
-    total_quantity
+    "Total Orders",
+    f"{total_orders:,}"
 )
 
+
 col3.metric(
+    "Total Quantity",
+    f"{total_quantity:,}"
+)
+
+
+col4.metric(
+    "Average Order Value",
+    f"₹{average_order_value:,.0f}"
+)
+
+
+# ============================================================
+# SECONDARY KPIs
+# ============================================================
+
+col5, col6 = st.columns(2)
+
+
+col5.metric(
     "Top Product",
     top_product
 )
 
-# -----------------------------
-# Sales by City
-# -----------------------------
 
-cursor.execute(f"""
-SELECT city, SUM(total_sales) AS total_sales
-FROM sales
-{where_clause}
-GROUP BY city
-ORDER BY total_sales DESC;
-""", tuple(params))
+col6.metric(
+    "Top City",
+    top_city
+)
 
-city_results = cursor.fetchall()
 
-city_data = {
-    "City": [row[0] for row in city_results],
-    "Sales": [row[1] for row in city_results]
-}
+# ============================================================
+# NO DATA MESSAGE
+# ============================================================
+
+if filtered_df.empty:
+
+    st.warning(
+        "No sales data matches the selected filters."
+    )
+
+    st.stop()
+
+
+# ============================================================
+# SALES BY CITY
+# ============================================================
 
 st.subheader("Sales by City")
 
-st.bar_chart(
-    city_data,
-    x="City",
-    y="Sales"
+sales_by_city = (
+    filtered_df
+    .groupby("city")["total_sales"]
+    .sum()
+    .sort_values(ascending=False)
 )
 
-# -----------------------------
-# Sales by Category
-# -----------------------------
+st.bar_chart(
+    sales_by_city
+)
 
-cursor.execute(f"""
-SELECT category, SUM(total_sales) AS total_sales
-FROM sales
-{where_clause}
-GROUP BY category
-ORDER BY total_sales DESC;
-""", tuple(params))
 
-category_results = cursor.fetchall()
-
-category_data = {
-    "Category": [row[0] for row in category_results],
-    "Sales": [row[1] for row in category_results]
-}
+# ============================================================
+# SALES BY CATEGORY
+# ============================================================
 
 st.subheader("Sales by Category")
 
-st.bar_chart(
-    category_data,
-    x="Category",
-    y="Sales"
+sales_by_category = (
+    filtered_df
+    .groupby("category")["total_sales"]
+    .sum()
+    .sort_values(ascending=False)
 )
 
-# -----------------------------
-# Sales by Product
-# -----------------------------
+st.bar_chart(
+    sales_by_category
+)
 
-cursor.execute(f"""
-SELECT product, SUM(total_sales) AS total_sales
-FROM sales
-{where_clause}
-GROUP BY product
-ORDER BY total_sales DESC;
-""", tuple(params))
 
-product_results = cursor.fetchall()
-
-product_data = {
-    "Product": [row[0] for row in product_results],
-    "Sales": [row[1] for row in product_results]
-}
+# ============================================================
+# SALES BY PRODUCT
+# ============================================================
 
 st.subheader("Sales by Product")
 
-st.bar_chart(
-    product_data,
-    x="Product",
-    y="Sales"
+sales_by_product = (
+    filtered_df
+    .groupby("product")["total_sales"]
+    .sum()
+    .sort_values(ascending=False)
 )
 
-# -----------------------------
-# Close Database
-# -----------------------------
+st.bar_chart(
+    sales_by_product
+)
 
-cursor.close()
-conn.close()
+
+# ============================================================
+# DAILY SALES TREND
+# ============================================================
+
+st.subheader("Daily Sales Trend")
+
+daily_sales = (
+    filtered_df
+    .groupby("order_date")["total_sales"]
+    .sum()
+    .sort_index()
+)
+
+st.line_chart(
+    daily_sales
+)
+
+
+# ============================================================
+# QUANTITY BY PRODUCT
+# ============================================================
+
+st.subheader("Quantity Sold by Product")
+
+quantity_by_product = (
+    filtered_df
+    .groupby("product")["quantity"]
+    .sum()
+    .sort_values(ascending=False)
+)
+
+st.bar_chart(
+    quantity_by_product
+)
+
+
+# ============================================================
+# FILTERED DATA
+# ============================================================
+
+st.subheader("Filtered Sales Data")
+
+display_df = filtered_df.copy()
+
+display_df["order_date"] = display_df[
+    "order_date"
+].astype(str)
+
+st.dataframe(
+    display_df,
+    use_container_width=True,
+    hide_index=True
+)
+
+
+# ============================================================
+# DOWNLOAD FILTERED DATA
+# ============================================================
+
+csv_buffer = StringIO()
+
+display_df.to_csv(
+    csv_buffer,
+    index=False
+)
+
+st.download_button(
+    label="Download Filtered Data",
+    data=csv_buffer.getvalue(),
+    file_name="filtered_sales.csv",
+    mime="text/csv"
+)
+
+
+# ============================================================
+# FOOTER
+# ============================================================
+
+st.divider()
+
+st.caption(
+    "Data source: PostgreSQL | "
+    "Data pipeline: Python + Pandas + PostgreSQL + Streamlit"
+)

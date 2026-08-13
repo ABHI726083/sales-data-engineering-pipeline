@@ -175,3 +175,25 @@ def get_sales_by_category():
     return df.to_dict(
         orient="records"
     )
+@app.get("/analytics/product")
+def get_sales_by_product():
+
+    engine = get_connection()
+
+    query = """
+        SELECT
+            product,
+            COALESCE(SUM(total_sales), 0) AS total_sales
+        FROM sales
+        GROUP BY product
+        ORDER BY total_sales DESC;
+    """
+
+    df = pd.read_sql_query(
+        query,
+        engine
+    )
+
+    return df.to_dict(
+        orient="records"
+    )

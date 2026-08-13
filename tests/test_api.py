@@ -90,3 +90,17 @@ def test_category_analytics_endpoint():
 
     assert data[1]["category"] == "Furniture"
     assert data[1]["total_sales"] == 51000
+def test_product_analytics_endpoint():
+    response = client.get("/analytics/product")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert isinstance(data, list)
+
+    assert data[0]["product"] == "Laptop"
+    assert data[0]["total_sales"] == 165000
+
+    assert data[1]["product"] == "Monitor"
+    assert data[1]["total_sales"] == 60000

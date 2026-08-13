@@ -76,3 +76,17 @@ def test_city_analytics_endpoint():
 
     assert data[0]["city"] == "Delhi"
     assert data[0]["total_sales"] == 198500
+def test_category_analytics_endpoint():
+    response = client.get("/analytics/category")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert isinstance(data, list)
+
+    assert data[0]["category"] == "Electronics"
+    assert data[0]["total_sales"] == 250500
+
+    assert data[1]["category"] == "Furniture"
+    assert data[1]["total_sales"] == 51000

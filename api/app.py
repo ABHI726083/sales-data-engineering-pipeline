@@ -153,3 +153,25 @@ def get_sales_by_city():
     return df.to_dict(
         orient="records"
     )
+@app.get("/analytics/category")
+def get_sales_by_category():
+
+    engine = get_connection()
+
+    query = """
+        SELECT
+            category,
+            COALESCE(SUM(total_sales), 0) AS total_sales
+        FROM sales
+        GROUP BY category
+        ORDER BY total_sales DESC;
+    """
+
+    df = pd.read_sql_query(
+        query,
+        engine
+    )
+
+    return df.to_dict(
+        orient="records"
+    )

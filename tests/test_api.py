@@ -103,4 +103,41 @@ def test_product_analytics_endpoint():
     assert data[0]["total_sales"] == 165000
 
     assert data[1]["product"] == "Monitor"
-    assert data[1]["total_sales"] == 60000
+    assert data[1]["total_sales"] == 60000 
+def test_sales_city_filter():
+    response = client.get("/sales?city=Delhi")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data) == 5
+
+    for record in data:
+        assert record["city"] == "Delhi"
+
+
+def test_sales_category_filter():
+    response = client.get("/sales?category=Electronics")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data) == 7
+
+    for record in data:
+        assert record["category"] == "Electronics"
+
+
+def test_sales_product_filter():
+    response = client.get("/sales?product=Laptop")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data) == 2
+
+    for record in data:
+        assert record["product"] == "Laptop"

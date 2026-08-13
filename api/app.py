@@ -2,7 +2,7 @@ import os
 
 import pandas as pd
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from sqlalchemy import create_engine
 from sqlalchemy.engine import URL
 
@@ -72,7 +72,11 @@ def health_check():
 # ============================================================
 
 @app.get("/sales")
-def get_sales():
+def get_sales(
+    city: str | None = Query(default=None),
+    category: str | None = Query(default=None),
+    product: str | None = Query(default=None),
+):
 
     engine = get_connection()
 
@@ -87,12 +91,20 @@ def get_sales():
             city,
             total_sales
         FROM sales
+        WHERE (%(city)s IS NULL OR city = %(city)s)
+          AND (%(category)s IS NULL OR category = %(category)s)
+          AND (%(product)s IS NULL OR product = %(product)s)
         ORDER BY order_date, order_id;
     """
 
     df = pd.read_sql_query(
         query,
-        engine
+        engine,
+        params={
+            "city": city,
+            "category": category,
+            "product": product,
+        }
     )
 
     df["order_date"] = df[
@@ -102,6 +114,12 @@ def get_sales():
     return df.to_dict(
         orient="records"
     )
+
+
+# ============================================================
+# ANALYTICS SUMMARY
+# ============================================================
+
 @app.get("/analytics/summary")
 def get_summary():
 
@@ -131,6 +149,12 @@ def get_summary():
             result["average_order_value"]
         ),
     }
+
+
+# ============================================================
+# SALES BY CITY
+# ============================================================
+
 @app.get("/analytics/city")
 def get_sales_by_city():
 
@@ -153,6 +177,12 @@ def get_sales_by_city():
     return df.to_dict(
         orient="records"
     )
+
+
+# ============================================================
+# SALES BY CATEGORY
+# ============================================================
+
 @app.get("/analytics/category")
 def get_sales_by_category():
 
@@ -175,6 +205,12 @@ def get_sales_by_category():
     return df.to_dict(
         orient="records"
     )
+
+
+# ============================================================
+# SALES BY PRODUCT
+# ============================================================
+
 @app.get("/analytics/product")
 def get_sales_by_product():
 

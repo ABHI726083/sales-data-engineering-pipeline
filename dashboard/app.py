@@ -2,8 +2,9 @@ import os
 from io import StringIO
 
 import pandas as pd
-import psycopg2
 import streamlit as st
+from sqlalchemy import create_engine
+from sqlalchemy.engine import URL
 from dotenv import load_dotenv
 
 
@@ -31,13 +32,17 @@ load_dotenv()
 
 @st.cache_resource
 def get_connection():
-    return psycopg2.connect(
+
+    connection_url = URL.create(
+        "postgresql+psycopg2",
+        username=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD"),
         host=os.getenv("DB_HOST"),
-        port=os.getenv("DB_PORT"),
+        port=int(os.getenv("DB_PORT")),
         database=os.getenv("DB_NAME"),
-        user=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASSWORD")
     )
+
+    return create_engine(connection_url)
 
 
 # ============================================================
@@ -46,6 +51,7 @@ def get_connection():
 
 @st.cache_data
 def load_sales_data():
+
     conn = get_connection()
 
     query = """
@@ -76,6 +82,7 @@ def load_sales_data():
 # ============================================================
 
 try:
+
     df = load_sales_data()
 
 except Exception as error:
@@ -107,9 +114,9 @@ st.caption(
 st.sidebar.header("Dashboard Filters")
 
 
-# ----------------------------
-# City Filter
-# ----------------------------
+# ============================================================
+# CITY FILTER
+# ============================================================
 
 cities = sorted(
     df["city"].dropna().unique().tolist()
@@ -121,9 +128,9 @@ selected_city = st.sidebar.selectbox(
 )
 
 
-# ----------------------------
-# Category Filter
-# ----------------------------
+# ============================================================
+# CATEGORY FILTER
+# ============================================================
 
 categories = sorted(
     df["category"].dropna().unique().tolist()
@@ -135,9 +142,9 @@ selected_category = st.sidebar.selectbox(
 )
 
 
-# ----------------------------
-# Date Filter
-# ----------------------------
+# ============================================================
+# DATE FILTER
+# ============================================================
 
 min_date = df["order_date"].min()
 max_date = df["order_date"].max()
@@ -439,9 +446,10 @@ display_df["order_date"] = display_df[
     "order_date"
 ].astype(str)
 
+
 st.dataframe(
     display_df,
-    use_container_width=True,
+    width="stretch",
     hide_index=True
 )
 
@@ -456,6 +464,7 @@ display_df.to_csv(
     csv_buffer,
     index=False
 )
+
 
 st.download_button(
     label="Download Filtered Data",

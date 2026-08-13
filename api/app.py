@@ -76,6 +76,8 @@ def get_sales(
     city: str | None = Query(default=None),
     category: str | None = Query(default=None),
     product: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
 ):
 
     engine = get_connection()
@@ -94,7 +96,9 @@ def get_sales(
         WHERE (%(city)s IS NULL OR city = %(city)s)
           AND (%(category)s IS NULL OR category = %(category)s)
           AND (%(product)s IS NULL OR product = %(product)s)
-        ORDER BY order_date, order_id;
+        ORDER BY order_date, order_id
+        LIMIT %(limit)s
+        OFFSET %(offset)s;
     """
 
     df = pd.read_sql_query(
@@ -104,6 +108,8 @@ def get_sales(
             "city": city,
             "category": category,
             "product": product,
+            "limit": limit,
+            "offset": offset,
         }
     )
 

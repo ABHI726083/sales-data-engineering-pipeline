@@ -141,3 +141,40 @@ def test_sales_product_filter():
 
     for record in data:
         assert record["product"] == "Laptop"
+def test_sales_limit():
+    response = client.get("/sales?limit=3")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data) == 3
+    assert data[0]["order_id"] == 1001
+    assert data[2]["order_id"] == 1003
+
+
+def test_sales_offset():
+    response = client.get("/sales?limit=3&offset=3")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data) == 3
+    assert data[0]["order_id"] == 1004
+    assert data[2]["order_id"] == 1006
+
+
+def test_sales_filter_with_pagination():
+    response = client.get(
+        "/sales?city=Delhi&limit=2"
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data) == 2
+
+    for record in data:
+        assert record["city"] == "Delhi"

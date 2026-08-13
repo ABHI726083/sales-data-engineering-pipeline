@@ -1,10 +1,7 @@
-import os
-from io import StringIO
-
+import requests
 import pandas as pd
 import streamlit as st
-from sqlalchemy import create_engine
-from sqlalchemy.engine import URL
+from io import StringIO
 from dotenv import load_dotenv
 
 
@@ -25,50 +22,26 @@ st.set_page_config(
 
 load_dotenv()
 
-
-# ============================================================
-# DATABASE CONNECTION
-# ============================================================
-
-@st.cache_resource
-def get_connection():
-
-    connection_url = URL.create(
-        "postgresql+psycopg2",
-        username=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASSWORD"),
-        host=os.getenv("DB_HOST"),
-        port=int(os.getenv("DB_PORT")),
-        database=os.getenv("DB_NAME"),
-    )
-
-    return create_engine(connection_url)
+API_URL = "http://127.0.0.1:8000"
 
 
 # ============================================================
-# LOAD DATA
+# LOAD DATA FROM FASTAPI
 # ============================================================
 
 @st.cache_data
 def load_sales_data():
 
-    conn = get_connection()
+    response = requests.get(
+        f"{API_URL}/sales",
+        timeout=10
+    )
 
-    query = """
-        SELECT
-            order_id,
-            order_date,
-            product,
-            category,
-            quantity,
-            price,
-            city,
-            total_sales
-        FROM sales
-        ORDER BY order_date, order_id;
-    """
+    response.raise_for_status()
 
-    df = pd.read_sql_query(query, conn)
+    data = response.json()
+
+    df = pd.DataFrame(data)
 
     df["order_date"] = pd.to_datetime(
         df["order_date"]
@@ -78,17 +51,36 @@ def load_sales_data():
 
 
 # ============================================================
-# LOAD DATABASE DATA
+# LOAD SALES DATA
 # ============================================================
 
 try:
 
     df = load_sales_data()
 
+except requests.exceptions.ConnectionError:
+
+    st.error(
+        "Unable to connect to FastAPI. "
+        "Make sure Uvicorn is running on http://127.0.0.1:8000"
+    )
+
+    st.stop()
+
+except requests.exceptions.RequestException as error:
+
+    st.error(
+        "FastAPI returned an error while loading sales data."
+    )
+
+    st.exception(error)
+
+    st.stop()
+
 except Exception as error:
 
     st.error(
-        "Unable to connect to PostgreSQL or load sales data."
+        "Unable to load sales data."
     )
 
     st.exception(error)
@@ -103,7 +95,7 @@ except Exception as error:
 st.title("📊 Sales Analytics Dashboard")
 
 st.caption(
-    "Interactive sales analytics powered by PostgreSQL"
+    "Interactive sales analytics powered by FastAPI + PostgreSQL"
 )
 
 
@@ -139,6 +131,20 @@ categories = sorted(
 selected_category = st.sidebar.selectbox(
     "Category",
     ["All Categories"] + categories
+)
+
+
+# ============================================================
+# PRODUCT FILTER
+# ============================================================
+
+products = sorted(
+    df["product"].dropna().unique().tolist()
+)
+
+selected_product = st.sidebar.selectbox(
+    "Product",
+    ["All Products"] + products
 )
 
 
@@ -199,6 +205,13 @@ if selected_category != "All Categories":
     ]
 
 
+if selected_product != "All Products":
+
+    filtered_df = filtered_df[
+        filtered_df["product"] == selected_product
+    ]
+
+
 filtered_df = filtered_df[
     (filtered_df["order_date"] >= start_date)
     &
@@ -221,22 +234,61 @@ st.sidebar.write(
 # KPI CALCULATIONS
 # ============================================================
 
-total_sales = filtered_df["total_sales"].sum()
+summary_response = requests.get(
+    f"{API_URL}/analytics/summary",
+    timeout=10
+)
 
-total_quantity = filtered_df["quantity"].sum()
+summary_response.raise_for_status()
 
-total_orders = filtered_df["order_id"].nunique()
+summary = summary_response.json()
 
 
-if total_orders > 0:
+# ============================================================
+# FILTERED KPI CALCULATIONS
+# ============================================================
 
-    average_order_value = (
-        total_sales / total_orders
-    )
+if (
+    selected_city == "All Cities"
+    and selected_category == "All Categories"
+    and selected_product == "All Products"
+    and start_date == min_date
+    and end_date == max_date
+):
+
+    total_sales = summary["total_sales"]
+
+    total_quantity = summary["total_quantity"]
+
+    total_orders = summary["total_orders"]
+
+    average_order_value = summary[
+        "average_order_value"
+    ]
 
 else:
 
-    average_order_value = 0
+    total_sales = filtered_df[
+        "total_sales"
+    ].sum()
+
+    total_quantity = filtered_df[
+        "quantity"
+    ].sum()
+
+    total_orders = filtered_df[
+        "order_id"
+    ].nunique()
+
+    if total_orders > 0:
+
+        average_order_value = (
+            total_sales / total_orders
+        )
+
+    else:
+
+        average_order_value = 0
 
 
 # ============================================================
@@ -345,17 +397,51 @@ if filtered_df.empty:
 
 
 # ============================================================
+# CHECK WHETHER DASHBOARD IS UNFILTERED
+# ============================================================
+
+is_unfiltered = (
+    selected_city == "All Cities"
+    and selected_category == "All Categories"
+    and selected_product == "All Products"
+    and start_date == min_date
+    and end_date == max_date
+)
+
+
+# ============================================================
 # SALES BY CITY
 # ============================================================
 
 st.subheader("Sales by City")
 
-sales_by_city = (
-    filtered_df
-    .groupby("city")["total_sales"]
-    .sum()
-    .sort_values(ascending=False)
-)
+
+if is_unfiltered:
+
+    city_response = requests.get(
+        f"{API_URL}/analytics/city",
+        timeout=10
+    )
+
+    city_response.raise_for_status()
+
+    city_data = city_response.json()
+
+    city_df = pd.DataFrame(city_data)
+
+    sales_by_city = city_df.set_index(
+        "city"
+    )["total_sales"]
+
+else:
+
+    sales_by_city = (
+        filtered_df
+        .groupby("city")["total_sales"]
+        .sum()
+        .sort_values(ascending=False)
+    )
+
 
 st.bar_chart(
     sales_by_city
@@ -368,12 +454,35 @@ st.bar_chart(
 
 st.subheader("Sales by Category")
 
-sales_by_category = (
-    filtered_df
-    .groupby("category")["total_sales"]
-    .sum()
-    .sort_values(ascending=False)
-)
+
+if is_unfiltered:
+
+    category_response = requests.get(
+        f"{API_URL}/analytics/category",
+        timeout=10
+    )
+
+    category_response.raise_for_status()
+
+    category_data = category_response.json()
+
+    category_df = pd.DataFrame(
+        category_data
+    )
+
+    sales_by_category = category_df.set_index(
+        "category"
+    )["total_sales"]
+
+else:
+
+    sales_by_category = (
+        filtered_df
+        .groupby("category")["total_sales"]
+        .sum()
+        .sort_values(ascending=False)
+    )
+
 
 st.bar_chart(
     sales_by_category
@@ -386,12 +495,35 @@ st.bar_chart(
 
 st.subheader("Sales by Product")
 
-sales_by_product = (
-    filtered_df
-    .groupby("product")["total_sales"]
-    .sum()
-    .sort_values(ascending=False)
-)
+
+if is_unfiltered:
+
+    product_response = requests.get(
+        f"{API_URL}/analytics/product",
+        timeout=10
+    )
+
+    product_response.raise_for_status()
+
+    product_data = product_response.json()
+
+    product_df = pd.DataFrame(
+        product_data
+    )
+
+    sales_by_product = product_df.set_index(
+        "product"
+    )["total_sales"]
+
+else:
+
+    sales_by_product = (
+        filtered_df
+        .groupby("product")["total_sales"]
+        .sum()
+        .sort_values(ascending=False)
+    )
+
 
 st.bar_chart(
     sales_by_product
@@ -482,5 +614,7 @@ st.divider()
 
 st.caption(
     "Data source: PostgreSQL | "
-    "Data pipeline: Python + Pandas + PostgreSQL + Streamlit"
+    "API: FastAPI | "
+    "Dashboard: Streamlit | "
+    "Pipeline: Python + Pandas"
 )

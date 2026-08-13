@@ -65,3 +65,14 @@ def test_summary_endpoint():
     assert data["total_orders"] == 11
     assert data["total_quantity"] == 41
     assert data["total_sales"] == 301500.0
+def test_city_analytics_endpoint():
+    response = client.get("/analytics/city")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert isinstance(data, list)
+
+    assert data[0]["city"] == "Delhi"
+    assert data[0]["total_sales"] == 198500

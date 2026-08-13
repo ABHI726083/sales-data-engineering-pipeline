@@ -131,3 +131,25 @@ def get_summary():
             result["average_order_value"]
         ),
     }
+@app.get("/analytics/city")
+def get_sales_by_city():
+
+    engine = get_connection()
+
+    query = """
+        SELECT
+            city,
+            COALESCE(SUM(total_sales), 0) AS total_sales
+        FROM sales
+        GROUP BY city
+        ORDER BY total_sales DESC;
+    """
+
+    df = pd.read_sql_query(
+        query,
+        engine
+    )
+
+    return df.to_dict(
+        orient="records"
+    )

@@ -55,3 +55,13 @@ def test_sales_record_structure():
     }
 
     assert expected_fields.issubset(data[0].keys())
+def test_summary_endpoint():
+    response = client.get("/analytics/summary")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["total_orders"] == 11
+    assert data["total_quantity"] == 41
+    assert data["total_sales"] == 301500.0

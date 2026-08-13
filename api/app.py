@@ -102,3 +102,32 @@ def get_sales():
     return df.to_dict(
         orient="records"
     )
+@app.get("/analytics/summary")
+def get_summary():
+
+    engine = get_connection()
+
+    query = """
+        SELECT
+            COUNT(*) AS total_orders,
+            COALESCE(SUM(quantity), 0) AS total_quantity,
+            COALESCE(SUM(total_sales), 0) AS total_sales,
+            COALESCE(AVG(total_sales), 0) AS average_order_value
+        FROM sales;
+    """
+
+    df = pd.read_sql_query(
+        query,
+        engine
+    )
+
+    result = df.iloc[0].to_dict()
+
+    return {
+        "total_orders": int(result["total_orders"]),
+        "total_quantity": int(result["total_quantity"]),
+        "total_sales": float(result["total_sales"]),
+        "average_order_value": float(
+            result["average_order_value"]
+        ),
+    }

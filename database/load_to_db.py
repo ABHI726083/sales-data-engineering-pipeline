@@ -13,6 +13,13 @@ from config.settings import (
     DB_PASSWORD,
 )
 
+from utils.logger import (
+    log_info,
+    log_warning,
+    log_error,
+    log_exception,
+)
+
 
 # ============================================================
 # PROJECT ROOT
@@ -26,10 +33,14 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 # ============================================================
 
 if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stdout.reconfigure(
+        encoding="utf-8"
+    )
 
 if hasattr(sys.stderr, "reconfigure"):
-    sys.stderr.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(
+        encoding="utf-8"
+    )
 
 
 # ============================================================
@@ -37,7 +48,13 @@ if hasattr(sys.stderr, "reconfigure"):
 # ============================================================
 
 def fail(message):
-    print(f"\nERROR: {message}")
+
+    print(
+        f"\nERROR: {message}"
+    )
+
+    log_error(message)
+
     sys.exit(1)
 
 
@@ -59,19 +76,33 @@ try:
     print("LOAD CLEANED DATA")
     print("================================")
 
-    cleaned_file = Path(CLEANED_DATA_FILE)
+    log_info(
+        "STEP 1: LOAD CLEANED DATA"
+    )
+
+    cleaned_file = Path(
+        CLEANED_DATA_FILE
+    )
 
     if not cleaned_file.is_absolute():
-        cleaned_file = PROJECT_ROOT / cleaned_file
 
-    if not cleaned_file.is_file():
-        fail(
-            f"Cleaned data file not found: {cleaned_file}"
+        cleaned_file = (
+            PROJECT_ROOT / cleaned_file
         )
 
-    df = pd.read_csv(cleaned_file)
+    if not cleaned_file.is_file():
+
+        fail(
+            f"Cleaned data file not found: "
+            f"{cleaned_file}"
+        )
+
+    df = pd.read_csv(
+        cleaned_file
+    )
 
     if df.empty:
+
         fail(
             "Cleaned data file contains no rows."
         )
@@ -94,6 +125,7 @@ try:
     ]
 
     if missing_columns:
+
         fail(
             "Missing required columns: "
             + ", ".join(missing_columns)
@@ -104,8 +136,19 @@ try:
         errors="raise"
     ).dt.date
 
-    print("Cleaned data loaded!")
-    print("Rows:", len(df))
+    print(
+        "Cleaned data loaded!"
+    )
+
+    print(
+        "Rows:",
+        len(df)
+    )
+
+    log_info(
+        f"Cleaned data loaded successfully - "
+        f"rows={len(df)}"
+    )
 
 
     # ========================================================
@@ -115,6 +158,10 @@ try:
     print("\n================================")
     print("CONNECT TO POSTGRESQL")
     print("================================")
+
+    log_info(
+        "STEP 2: CONNECT TO POSTGRESQL"
+    )
 
     conn = psycopg2.connect(
         host=DB_HOST,
@@ -126,7 +173,13 @@ try:
 
     cursor = conn.cursor()
 
-    print("Connected to PostgreSQL successfully!")
+    print(
+        "Connected to PostgreSQL successfully!"
+    )
+
+    log_info(
+        "Connected to PostgreSQL successfully"
+    )
 
 
     # ========================================================
@@ -136,6 +189,10 @@ try:
     print("\n================================")
     print("PREPARE DATABASE TABLE")
     print("================================")
+
+    log_info(
+        "STEP 3: PREPARE DATABASE TABLE"
+    )
 
     cursor.execute(
         """
@@ -152,7 +209,13 @@ try:
         """
     )
 
-    print("Sales table ready.")
+    print(
+        "Sales table ready."
+    )
+
+    log_info(
+        "Sales table ready"
+    )
 
 
     # ========================================================
@@ -163,6 +226,10 @@ try:
     print("UPSERT DATA")
     print("================================")
 
+    log_info(
+        "STEP 4: UPSERT DATA"
+    )
+
     inserted = 0
     updated = 0
     unchanged = 0
@@ -170,7 +237,10 @@ try:
 
     for _, row in df.iterrows():
 
-        order_id = int(row["order_id"])
+        order_id = int(
+            row["order_id"]
+        )
+
 
         # ====================================================
         # CHECK EXISTING ORDER
@@ -323,10 +393,18 @@ try:
     print("COMMIT TRANSACTION")
     print("================================")
 
+    log_info(
+        "STEP 5: COMMIT TRANSACTION"
+    )
+
     conn.commit()
 
     print(
         "Database transaction committed successfully!"
+    )
+
+    log_info(
+        "Database transaction committed successfully"
     )
 
 
@@ -353,6 +431,13 @@ try:
         unchanged
     )
 
+    log_info(
+        f"Loading summary - "
+        f"inserted={inserted}, "
+        f"updated={updated}, "
+        f"unchanged={unchanged}"
+    )
+
 
     # ========================================================
     # STEP 7: VERIFY DATABASE
@@ -361,6 +446,10 @@ try:
     print("\n================================")
     print("VERIFY DATABASE")
     print("================================")
+
+    log_info(
+        "STEP 7: VERIFY DATABASE"
+    )
 
     cursor.execute(
         """
@@ -393,6 +482,11 @@ try:
         "Database verification passed!"
     )
 
+    log_info(
+        f"Database verification passed - "
+        f"rows={row_count}"
+    )
+
 
     # ========================================================
     # CLOSE DATABASE
@@ -406,6 +500,10 @@ try:
 
     print(
         "\nDatabase connection closed."
+    )
+
+    log_info(
+        "Database connection closed successfully"
     )
 
 
@@ -424,6 +522,10 @@ except Exception as error:
         error
     )
 
+    log_exception(
+        "Database loading failed"
+    )
+
 
     # ========================================================
     # ROLLBACK
@@ -439,11 +541,19 @@ except Exception as error:
                 "Transaction rolled back."
             )
 
+            log_info(
+                "Transaction rolled back successfully"
+            )
+
         except Exception as rollback_error:
 
             print(
                 "Rollback failed:",
                 rollback_error
+            )
+
+            log_exception(
+                "Database transaction rollback failed"
             )
 
 
@@ -457,8 +567,12 @@ except Exception as error:
 
             cursor.close()
 
-        except Exception:
-            pass
+        except Exception as cleanup_error:
+
+            log_warning(
+                "Failed to close database cursor: "
+                f"{cleanup_error}"
+            )
 
 
     # ========================================================
@@ -471,8 +585,12 @@ except Exception as error:
 
             conn.close()
 
-        except Exception:
-            pass
+        except Exception as cleanup_error:
+
+            log_warning(
+                "Failed to close database connection: "
+                f"{cleanup_error}"
+            )
 
 
     sys.exit(1)

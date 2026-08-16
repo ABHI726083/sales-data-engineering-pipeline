@@ -296,3 +296,139 @@ def test_sales_filter_with_pagination():
     for record in data:
 
         assert record["city"] == "Delhi"
+
+
+# ============================================================
+# INVALID LIMIT - TOO SMALL
+# ============================================================
+
+def test_sales_invalid_limit_zero():
+
+    response = client.get(
+        "/sales?limit=0"
+    )
+
+    assert response.status_code == 422
+
+
+# ============================================================
+# INVALID LIMIT - TOO LARGE
+# ============================================================
+
+def test_sales_invalid_limit_too_large():
+
+    response = client.get(
+        "/sales?limit=1001"
+    )
+
+    assert response.status_code == 422
+
+
+# ============================================================
+# INVALID OFFSET - NEGATIVE
+# ============================================================
+
+def test_sales_invalid_offset():
+
+    response = client.get(
+        "/sales?offset=-1"
+    )
+
+    assert response.status_code == 422
+
+
+# ============================================================
+# UNKNOWN CITY
+# ============================================================
+
+def test_sales_unknown_city():
+
+    response = client.get(
+        "/sales?city=UnknownCity"
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data == []
+
+
+# ============================================================
+# UNKNOWN CATEGORY
+# ============================================================
+
+def test_sales_unknown_category():
+
+    response = client.get(
+        "/sales?category=UnknownCategory"
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data == []
+
+
+# ============================================================
+# UNKNOWN PRODUCT
+# ============================================================
+
+def test_sales_unknown_product():
+
+    response = client.get(
+        "/sales?product=UnknownProduct"
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data == []
+
+
+# ============================================================
+# COMBINED CITY + CATEGORY FILTER
+# ============================================================
+
+def test_sales_city_and_category_filter():
+
+    response = client.get(
+        "/sales?city=Delhi&category=Electronics"
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data) == 4
+
+    for record in data:
+
+        assert record["city"] == "Delhi"
+
+        assert record["category"] == "Electronics"
+
+
+# ============================================================
+# COMBINED CITY + PRODUCT FILTER
+# ============================================================
+
+def test_sales_city_and_product_filter():
+
+    response = client.get(
+        "/sales?city=Delhi&product=Laptop"
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data) == 1
+
+    assert data[0]["city"] == "Delhi"
+
+    assert data[0]["product"] == "Laptop"
+
+    assert data[0]["order_id"] == 1001

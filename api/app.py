@@ -2,9 +2,10 @@ import os
 
 import pandas as pd
 from dotenv import load_dotenv
-from fastapi import FastAPI, Query
-from sqlalchemy import create_engine
+from fastapi import FastAPI, Query, HTTPException
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine import URL
+from sqlalchemy.exc import SQLAlchemyError
 
 
 # ============================================================
@@ -12,6 +13,32 @@ from sqlalchemy.engine import URL
 # ============================================================
 
 load_dotenv()
+
+
+# ============================================================
+# DATABASE CONFIGURATION
+# ============================================================
+
+connection_url = URL.create(
+    "postgresql+psycopg2",
+    username=os.getenv("DB_USER"),
+    password=os.getenv("DB_PASSWORD"),
+    host=os.getenv("DB_HOST"),
+    port=int(os.getenv("DB_PORT")),
+    database=os.getenv("DB_NAME"),
+)
+
+
+# ============================================================
+# DATABASE ENGINE
+# ============================================================
+
+engine = create_engine(
+    connection_url,
+    pool_pre_ping=True,
+    pool_size=5,
+    max_overflow=10,
+)
 
 
 # ============================================================
@@ -23,24 +50,6 @@ app = FastAPI(
     description="API for the Sales Data Engineering Pipeline",
     version="1.0.0",
 )
-
-
-# ============================================================
-# DATABASE CONNECTION
-# ============================================================
-
-def get_connection():
-
-    connection_url = URL.create(
-        "postgresql+psycopg2",
-        username=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASSWORD"),
-        host=os.getenv("DB_HOST"),
-        port=int(os.getenv("DB_PORT")),
-        database=os.getenv("DB_NAME"),
-    )
-
-    return create_engine(connection_url)
 
 
 # ============================================================
@@ -62,9 +71,25 @@ def root():
 @app.get("/health")
 def health_check():
 
-    return {
-        "status": "healthy"
-    }
+    try:
+
+        with engine.connect() as connection:
+
+            connection.execute(
+                text("SELECT 1")
+            )
+
+        return {
+            "status": "healthy",
+            "database": "connected"
+        }
+
+    except SQLAlchemyError:
+
+        raise HTTPException(
+            status_code=503,
+            detail="Database connection failed"
+        )
 
 
 # ============================================================
@@ -76,11 +101,16 @@ def get_sales(
     city: str | None = Query(default=None),
     category: str | None = Query(default=None),
     product: str | None = Query(default=None),
-    limit: int = Query(default=100, ge=1, le=1000),
-    offset: int = Query(default=0, ge=0),
+    limit: int = Query(
+        default=100,
+        ge=1,
+        le=1000
+    ),
+    offset: int = Query(
+        default=0,
+        ge=0
+    ),
 ):
-
-    engine = get_connection()
 
     query = """
         SELECT
@@ -101,25 +131,34 @@ def get_sales(
         OFFSET %(offset)s;
     """
 
-    df = pd.read_sql_query(
-        query,
-        engine,
-        params={
-            "city": city,
-            "category": category,
-            "product": product,
-            "limit": limit,
-            "offset": offset,
-        }
-    )
+    try:
 
-    df["order_date"] = df[
-        "order_date"
-    ].astype(str)
+        df = pd.read_sql_query(
+            query,
+            engine,
+            params={
+                "city": city,
+                "category": category,
+                "product": product,
+                "limit": limit,
+                "offset": offset,
+            }
+        )
 
-    return df.to_dict(
-        orient="records"
-    )
+        df["order_date"] = df[
+            "order_date"
+        ].astype(str)
+
+        return df.to_dict(
+            orient="records"
+        )
+
+    except SQLAlchemyError:
+
+        raise HTTPException(
+            status_code=503,
+            detail="Unable to retrieve sales data"
+        )
 
 
 # ============================================================
@@ -128,8 +167,6 @@ def get_sales(
 
 @app.get("/analytics/summary")
 def get_summary():
-
-    engine = get_connection()
 
     query = """
         SELECT
@@ -140,21 +177,36 @@ def get_summary():
         FROM sales;
     """
 
-    df = pd.read_sql_query(
-        query,
-        engine
-    )
+    try:
 
-    result = df.iloc[0].to_dict()
+        df = pd.read_sql_query(
+            query,
+            engine
+        )
 
-    return {
-        "total_orders": int(result["total_orders"]),
-        "total_quantity": int(result["total_quantity"]),
-        "total_sales": float(result["total_sales"]),
-        "average_order_value": float(
-            result["average_order_value"]
-        ),
-    }
+        result = df.iloc[0].to_dict()
+
+        return {
+            "total_orders": int(
+                result["total_orders"]
+            ),
+            "total_quantity": int(
+                result["total_quantity"]
+            ),
+            "total_sales": float(
+                result["total_sales"]
+            ),
+            "average_order_value": float(
+                result["average_order_value"]
+            ),
+        }
+
+    except SQLAlchemyError:
+
+        raise HTTPException(
+            status_code=503,
+            detail="Unable to retrieve summary analytics"
+        )
 
 
 # ============================================================
@@ -163,8 +215,6 @@ def get_summary():
 
 @app.get("/analytics/city")
 def get_sales_by_city():
-
-    engine = get_connection()
 
     query = """
         SELECT
@@ -175,14 +225,23 @@ def get_sales_by_city():
         ORDER BY total_sales DESC;
     """
 
-    df = pd.read_sql_query(
-        query,
-        engine
-    )
+    try:
 
-    return df.to_dict(
-        orient="records"
-    )
+        df = pd.read_sql_query(
+            query,
+            engine
+        )
+
+        return df.to_dict(
+            orient="records"
+        )
+
+    except SQLAlchemyError:
+
+        raise HTTPException(
+            status_code=503,
+            detail="Unable to retrieve city analytics"
+        )
 
 
 # ============================================================
@@ -191,8 +250,6 @@ def get_sales_by_city():
 
 @app.get("/analytics/category")
 def get_sales_by_category():
-
-    engine = get_connection()
 
     query = """
         SELECT
@@ -203,14 +260,23 @@ def get_sales_by_category():
         ORDER BY total_sales DESC;
     """
 
-    df = pd.read_sql_query(
-        query,
-        engine
-    )
+    try:
 
-    return df.to_dict(
-        orient="records"
-    )
+        df = pd.read_sql_query(
+            query,
+            engine
+        )
+
+        return df.to_dict(
+            orient="records"
+        )
+
+    except SQLAlchemyError:
+
+        raise HTTPException(
+            status_code=503,
+            detail="Unable to retrieve category analytics"
+        )
 
 
 # ============================================================
@@ -219,8 +285,6 @@ def get_sales_by_category():
 
 @app.get("/analytics/product")
 def get_sales_by_product():
-
-    engine = get_connection()
 
     query = """
         SELECT
@@ -231,11 +295,20 @@ def get_sales_by_product():
         ORDER BY total_sales DESC;
     """
 
-    df = pd.read_sql_query(
-        query,
-        engine
-    )
+    try:
 
-    return df.to_dict(
-        orient="records"
-    )
+        df = pd.read_sql_query(
+            query,
+            engine
+        )
+
+        return df.to_dict(
+            orient="records"
+        )
+
+    except SQLAlchemyError:
+
+        raise HTTPException(
+            status_code=503,
+            detail="Unable to retrieve product analytics"
+        )

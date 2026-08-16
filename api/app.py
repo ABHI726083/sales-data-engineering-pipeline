@@ -1,18 +1,16 @@
-import os
-
 import pandas as pd
-from dotenv import load_dotenv
 from fastapi import FastAPI, Query, HTTPException
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import URL
 from sqlalchemy.exc import SQLAlchemyError
 
-
-# ============================================================
-# LOAD ENVIRONMENT VARIABLES
-# ============================================================
-
-load_dotenv()
+from config.settings import (
+    DB_HOST,
+    DB_PORT,
+    DB_NAME,
+    DB_USER,
+    DB_PASSWORD,
+)
 
 
 # ============================================================
@@ -21,11 +19,11 @@ load_dotenv()
 
 connection_url = URL.create(
     "postgresql+psycopg2",
-    username=os.getenv("DB_USER"),
-    password=os.getenv("DB_PASSWORD"),
-    host=os.getenv("DB_HOST"),
-    port=int(os.getenv("DB_PORT")),
-    database=os.getenv("DB_NAME"),
+    username=DB_USER,
+    password=DB_PASSWORD,
+    host=DB_HOST,
+    port=int(DB_PORT),
+    database=DB_NAME,
 )
 
 

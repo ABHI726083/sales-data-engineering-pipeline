@@ -12,6 +12,12 @@ from config.settings import (
     DB_PASSWORD,
 )
 
+from utils.logger import (
+    log_info,
+    log_error,
+    log_exception,
+)
+
 
 # ============================================================
 # DATABASE CONFIGURATION
@@ -49,6 +55,8 @@ app = FastAPI(
     version="1.0.0",
 )
 
+log_info("FastAPI application initialized")
+
 
 # ============================================================
 # ROOT ENDPOINT
@@ -56,6 +64,8 @@ app = FastAPI(
 
 @app.get("/")
 def root():
+
+    log_info("GET / request received")
 
     return {
         "message": "Sales Data Engineering API is running"
@@ -69,6 +79,8 @@ def root():
 @app.get("/health")
 def health_check():
 
+    log_info("GET /health request received")
+
     try:
 
         with engine.connect() as connection:
@@ -77,12 +89,20 @@ def health_check():
                 text("SELECT 1")
             )
 
+        log_info(
+            "Database health check successful"
+        )
+
         return {
             "status": "healthy",
             "database": "connected"
         }
 
     except SQLAlchemyError:
+
+        log_exception(
+            "Database health check failed"
+        )
 
         raise HTTPException(
             status_code=503,
@@ -109,6 +129,15 @@ def get_sales(
         ge=0
     ),
 ):
+
+    log_info(
+        "GET /sales request - "
+        f"city={city}, "
+        f"category={category}, "
+        f"product={product}, "
+        f"limit={limit}, "
+        f"offset={offset}"
+    )
 
     query = """
         SELECT
@@ -147,11 +176,22 @@ def get_sales(
             "order_date"
         ].astype(str)
 
-        return df.to_dict(
+        records = df.to_dict(
             orient="records"
         )
 
+        log_info(
+            f"GET /sales successful - "
+            f"rows_returned={len(records)}"
+        )
+
+        return records
+
     except SQLAlchemyError:
+
+        log_exception(
+            "Failed to retrieve sales data"
+        )
 
         raise HTTPException(
             status_code=503,
@@ -165,6 +205,10 @@ def get_sales(
 
 @app.get("/analytics/summary")
 def get_summary():
+
+    log_info(
+        "GET /analytics/summary request received"
+    )
 
     query = """
         SELECT
@@ -184,7 +228,7 @@ def get_summary():
 
         result = df.iloc[0].to_dict()
 
-        return {
+        response = {
             "total_orders": int(
                 result["total_orders"]
             ),
@@ -199,7 +243,17 @@ def get_summary():
             ),
         }
 
+        log_info(
+            "GET /analytics/summary successful"
+        )
+
+        return response
+
     except SQLAlchemyError:
+
+        log_exception(
+            "Failed to retrieve summary analytics"
+        )
 
         raise HTTPException(
             status_code=503,
@@ -213,6 +267,10 @@ def get_summary():
 
 @app.get("/analytics/city")
 def get_sales_by_city():
+
+    log_info(
+        "GET /analytics/city request received"
+    )
 
     query = """
         SELECT
@@ -230,11 +288,22 @@ def get_sales_by_city():
             engine
         )
 
-        return df.to_dict(
+        records = df.to_dict(
             orient="records"
         )
 
+        log_info(
+            f"GET /analytics/city successful - "
+            f"rows_returned={len(records)}"
+        )
+
+        return records
+
     except SQLAlchemyError:
+
+        log_exception(
+            "Failed to retrieve city analytics"
+        )
 
         raise HTTPException(
             status_code=503,
@@ -248,6 +317,10 @@ def get_sales_by_city():
 
 @app.get("/analytics/category")
 def get_sales_by_category():
+
+    log_info(
+        "GET /analytics/category request received"
+    )
 
     query = """
         SELECT
@@ -265,11 +338,22 @@ def get_sales_by_category():
             engine
         )
 
-        return df.to_dict(
+        records = df.to_dict(
             orient="records"
         )
 
+        log_info(
+            f"GET /analytics/category successful - "
+            f"rows_returned={len(records)}"
+        )
+
+        return records
+
     except SQLAlchemyError:
+
+        log_exception(
+            "Failed to retrieve category analytics"
+        )
 
         raise HTTPException(
             status_code=503,
@@ -283,6 +367,10 @@ def get_sales_by_category():
 
 @app.get("/analytics/product")
 def get_sales_by_product():
+
+    log_info(
+        "GET /analytics/product request received"
+    )
 
     query = """
         SELECT
@@ -300,11 +388,22 @@ def get_sales_by_product():
             engine
         )
 
-        return df.to_dict(
+        records = df.to_dict(
             orient="records"
         )
 
+        log_info(
+            f"GET /analytics/product successful - "
+            f"rows_returned={len(records)}"
+        )
+
+        return records
+
     except SQLAlchemyError:
+
+        log_exception(
+            "Failed to retrieve product analytics"
+        )
 
         raise HTTPException(
             status_code=503,

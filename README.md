@@ -51,6 +51,7 @@ Reports
 - FastAPI REST API
 - API filtering and pagination
 - Streamlit dashboard
+- Automated application startup
 - Application logging
 - Automated testing with pytest
 - Bandit security scanning
@@ -189,6 +190,28 @@ The project includes an interactive Streamlit dashboard for viewing sales data a
 streamlit run dashboard\app.py
 \`\`\`
 
+## Automated Application Startup
+
+The project includes an automated launcher that starts the FastAPI backend and Streamlit dashboard together.
+
+### Start the Application
+
+\`\`\`powershell
+python start_app.py
+\`\`\`
+
+The launcher automatically starts both services and opens:
+
+\`\`\`text
+FastAPI Documentation
+http://127.0.0.1:8000/docs
+
+Streamlit Dashboard
+http://127.0.0.1:8501
+\`\`\`
+
+Press \`Ctrl+C\` to stop the application.
+
 ## Logging
 
 Pipeline execution logs are stored in:
@@ -273,7 +296,7 @@ No known vulnerabilities found
 ### Python Security Scan
 
 \`\`\`powershell
-bandit -r api src utils database config run_pipeline.py -ll
+bandit -r api src utils database config run_pipeline.py start_app.py -ll
 \`\`\`
 
 Expected result:
@@ -374,6 +397,7 @@ sales-data-engineering-pipeline/
 +-- README.md
 +-- requirements.txt
 +-- run_pipeline.py
++-- start_app.py
 \`\`\`
 
 ## Technology Stack
@@ -437,5 +461,4 @@ The cleaning stage successfully removed those invalid records before validation 
 The objective of this project is to demonstrate a complete data engineering workflow that transforms raw sales data into validated, database-ready information and makes the resulting analytics available through reports, APIs, and an interactive dashboard.
 
 ## License
-
 This project is intended for educational, portfolio, and demonstration purposes.
